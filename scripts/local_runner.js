@@ -6,7 +6,7 @@
 //   // return GET_DIV("MC.PA", 2019)
 // }
 
-const MongoService = require('./db_service');
+const MongoService = require('../src/db_service');
 
 // Mocking a cache logic in your GET_DIV
 global.getStoredData = async (ticker) => {
@@ -28,9 +28,9 @@ global.setStoredData = async (ticker, data) => {
 };
 
 // Load mocks first
-require('./gas');
+require('../src/gas');
 
-const { GET_DIV } = require('./logic');
+const { GET_DIV } = require('../src/logic');
 
 async function test() {
   console.log("--- Teszt indítása ---");

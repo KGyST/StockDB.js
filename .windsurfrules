@@ -1,0 +1,15 @@
+# Coding Style & Documentation
+- All comments MUST be in English. No Hungarian comments allowed.
+- Never place comments at the end of a line. Always place them on a new line above the code.
+- Use comments sparingly; only for non-obvious logic.
+- Use 2-space indentation for all files.
+- When writing temporary test files, use the name pattern `try_*.js`. Retain the `test_` prefix for unit test etc. files.
+
+# Execution & Debugging
+- When running tests, use the 'Debug Local Runner' launch configuration.
+- Monitor terminal output for ReferenceErrors (e.g., SpreadsheetApp, UrlFetchApp).
+- If a Google-specific service is missing during local execution, automatically suggest a mock in local_runner.js.
+
+# Environment
+- Use process.env.MONGO_URI for MongoDB connections.
+- Always check if the current environment is Node.js vs Google Apps Script using 'typeof module'.

@@ -1,0 +1,12 @@
+{
+  "_id": "test/dividend/new",
+  "data": [
+    {
+      "value": 2.5,
+      "date": "2026-01-01",
+      "period": "Test"
+    }
+  ],
+  "createdAt": "2026-02-08T16:41:06.494Z",
+  "expiresAt": "2026-02-08T22:41:06.494Z"
+}

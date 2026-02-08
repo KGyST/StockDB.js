@@ -1,0 +1,18 @@
+{
+  "name": "clasp",
+  "version": "1.0.0",
+  "main": "IMPORTJSON.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/google-apps-script": "^2.0.8"
+  },
+  "dependencies": {
+    "mongodb": "^7.1.0"
+  }
+}

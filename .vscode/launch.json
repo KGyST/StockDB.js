@@ -6,9 +6,34 @@
       "request": "launch",
       "name": "Debug Local Runner",
       "skipFiles": ["<node_internals>/**"],
-      "program": "${workspaceFolder}/local_runner.js",
+      "program": "${workspaceFolder}/scripts/local_runner.js",
       "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen"
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "NODE_OPTIONS": "--inspect"
+      },
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Test",
+      "skipFiles": ["<node_internals>/**"],
+      "program": "${workspaceFolder}/scripts/debug_test.js",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "env": {
+        "NODE_OPTIONS": "--inspect"
+      },
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ]
     }
   ]
 }

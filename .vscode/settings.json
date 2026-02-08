@@ -1,0 +1,10 @@
+{
+  "debug.node.autoAttach": "on",
+  "debug.terminal.clearBeforeReusing": true,
+  "node.debug": {
+    "skipFiles": [
+      "${workspaceFolder}/node_modules/**"
+    ]
+  },
+  "typescript.preferences.includePackageJsonAutoImports": "off"
+}

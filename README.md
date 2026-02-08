@@ -5,12 +5,11 @@
 ```
 StockDB.js/
 ├── src/                    # Main application code (deployed to Google Apps Script)
-│   ├── gas.js             # Google Apps Script service mocks
 │   ├── db_service.js      # MongoDB cache service
 │   ├── logic.js           # Core business logic
-│   ├── mock_mongo_service.js # Local MongoDB mock for testing
 │   └── appsscript.json   # Google Apps Script manifest
 ├── scripts/               # Local development and testing scripts
+│   ├── gas.js             # Google Apps Script service mocks
 │   └── local_runner.js    # Local test runner
 ├── test_data/             # Test data files
 │   └── eodhd_dividends.json
@@ -52,13 +51,13 @@ Copy `.env.example` to `.env` and configure:
 
 ## MongoDB Integration
 
-The application supports both real MongoDB and mock MongoDB service:
-- **Real MongoDB**: Uses connection from environment variables
-- **Mock Service**: Local file-based cache for development without MongoDB
+The application uses MongoDB for caching:
+- **Local Development**: Uses MongoDB connection from environment variables
+- **Google Apps Script**: Uses UrlFetchApp for HTTP-based cache operations
 
 ## Google Apps Script Services
 
-All Google Apps Script services are mocked in `src/gas.js` for local development:
+All Google Apps Script services are mocked in `scripts/gas.js` for local development:
 - `PropertiesService` - Reads from `.env` file
 - `CacheService` - In-memory cache
 - `UrlFetchApp` - HTTP requests using node-fetch

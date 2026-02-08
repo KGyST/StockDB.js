@@ -28,7 +28,7 @@ global.setStoredData = async (ticker, data) => {
 };
 
 // Load mocks first
-require('../src/gas');
+require('./gas');
 
 const { GET_DIV } = require('../src/logic');
 

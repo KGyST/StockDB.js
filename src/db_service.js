@@ -1,8 +1,4 @@
 // db_service.js
-let MockMongoService;
-if (typeof module !== 'undefined') {
-  MockMongoService = require('./mock_mongo_service');
-}
 let MongoClient;
 if (typeof module !== 'undefined') {
   MongoClient = require('mongodb').MongoClient;
@@ -13,10 +9,6 @@ const MongoService = {
     if (typeof MongoClient !== 'undefined') {
       // Local Node.js implementation
       return await this._localGet(ticker);
-    } else if (typeof MockMongoService !== 'undefined') {
-      // Mock service implementation
-      const mockService = new MockMongoService();
-      return await mockService.getCache(ticker);
     } else {
       // Google Apps Script implementation via UrlFetchApp
       return this._gasGet(ticker);
@@ -27,10 +19,6 @@ const MongoService = {
     if (typeof MongoClient !== 'undefined') {
       // Local Node.js implementation
       return await this._localSave(ticker, data, ttl);
-    } else if (typeof MockMongoService !== 'undefined') {
-      // Mock service implementation
-      const mockService = new MockMongoService();
-      return await mockService.saveCache(ticker, data, ttl);
     } else {
       // Google Apps Script implementation via UrlFetchApp
       return this._gasSave(ticker, data, ttl);

@@ -55,10 +55,10 @@ async function testWithMockService() {
       };
       
       // Write expired data manually
-      const expiredPath = path.join(__dirname, 'cache', 'test_expired.json');
+      const expiredPath = path.join(__dirname, 'cache', 'try_expired.json');
       fs.writeFileSync(expiredPath, JSON.stringify(expiredData, null, 2));
       
-      const expiredCheck = await mockService.getCache('test/expired');
+      const expiredCheck = await mockService.getCache('try/expired');
       if (!expiredCheck) {
         console.log('✓ Exired data correctly removed');
       } else {

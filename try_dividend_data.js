@@ -49,7 +49,7 @@ async function testDividendData() {
       
     } else {
       console.log('✗ No data found for eodhd/dividends/asml.as');
-      console.log('Make sure the data was loaded by running test_with_mock.js first');
+      console.log('Make sure the data was loaded by running try_with_mock.js first');
     }
     
   } catch (error) {

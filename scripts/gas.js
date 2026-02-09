@@ -45,19 +45,12 @@ if (typeof CacheService === 'undefined') {
 
 if (typeof UrlFetchApp === 'undefined') {
   global.UrlFetchApp = {
-    fetch: (url) => {
-      console.log(`Mock: Fetching ${url}`);
-      // Return mock response for testing
+    fetch: async (url) => {
+      const response = await fetch(url);
+      const text = await response.text();
       return {
-        getContentText: () => {
-          if (url.includes('eodhd.com')) {
-            return JSON.stringify([
-              { value: 1.5, date: "2011-01-01", period: "Final" },
-              { value: 0.75, date: "2010-06-01", period: "Interim" }
-            ]);
-          }
-          return '{}';
-        }
+        getContentText: () => text,
+        getResponseCode: () => response.status
       };
     }
   };
@@ -113,3 +106,4 @@ function setAlphaVantageKey() {
     ui.alert("Key saved");
   }
 }
+

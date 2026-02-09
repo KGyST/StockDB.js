@@ -28,55 +28,77 @@ Array.prototype.last = function() {
   /* ==============================================================
      FETCH + CACHE
      ============================================================== */
-  function fetchAlphaVantageJson(ticker, endpoint) {
-    const cache = CacheService.getScriptCache();
-    const props = PropertiesService.getScriptProperties();
-    const key = `AV_${endpoint}_${ticker}`;
-  
-    let raw = cache.get(key) || props.getProperty(key);
-    if (raw) return JSON.parse(raw);
-  
-    const url =
-      `https://www.alphavantage.co/query?function=${endpoint}` +
-      `&symbol=${ticker}&apikey=${getAlphaVantageKey()}`;
-  
+  async function fetchAlphaVantageJson(ticker, endpoint) {
+    const mongoId = `alphavantage/${endpoint}/${ticker}`;
+    
+    // Try to get from cache first
+    try {
+      const cached = await MongoService.getCache(mongoId);
+      if (cached) {
+        console.log(`Cache hit for ${mongoId}`);
+        return cached.data;
+      }
+    } catch (error) {
+      console.log('Cache check failed:', error.message);
+    }
+    
+    // If not in cache, fetch from API
+    const key = PropertiesService.getScriptProperties().getProperty('ALPHA_VANTAGE_API_KEY');
+    if (!key) throw new Error("Alpha Vantage API key not set");
+    
+    const url = `https://www.alphavantage.co/query?function=${endpoint}&symbol=${ticker}&apikey=${key}`;
+    console.log(`Fetching ${url}`);
+    
     const resp = UrlFetchApp.fetch(url);
-    raw = resp.getContentText();
-  
-    props.setProperty(key, raw);
-    if (raw.length < 100 * 1024) cache.put(key, raw, 21600);
-  
-    return JSON.parse(raw);
+    const raw = resp.getContentText();
+    const data = JSON.parse(raw);
+    
+    // Cache the result
+    try {
+      await MongoService.saveCache(mongoId, data, 21600);
+      console.log(`Cached ${mongoId} for 6 hours`);
+    } catch (error) {
+      console.log('Cache save failed:', error.message);
+    }
+    
+    return data;
   }
   
 
-  function fetchEODHDJson(ticker, year, endpoint = "div") {
-    const cache = CacheService.getScriptCache();
-    const props = PropertiesService.getScriptProperties();
-    const key = `AV_${endpoint}_${ticker}`;
-    const lock = LockService.getScriptLock();
-  
-    let raw = cache.get(key) || props.getProperty(key);
-    if (raw) return raw;
-
-    const _token = "697e7b9bbdf2d4.20018857";
-    const url =      
-      `https://eodhd.com/api/${endpoint}/` +
-      `/${ticker}?api_token=${_token}&fmt=json`;
-  
-    lock.waitLock(30000);
-
-    try{
-      const resp = UrlFetchApp.fetch(url);
-      raw = resp.getContentText();
+  async function fetchEODHDJson(ticker, year, endpoint = "div") {
+    const mongoId = `eodhd/${endpoint}/${ticker}`;
     
-      props.setProperty(key, raw);
-      if (raw.length < 100 * 1024) cache.put(key, raw, 21600);
-    
-      return raw;
-    } finally {
-      lock.releaseLock();
+    // Try to get from cache first
+    try {
+      const cached = await MongoService.getCache(mongoId);
+      if (cached) {
+        console.log(`Cache hit for ${mongoId}`);
+        return cached.data;
+      }
+    } catch (error) {
+      console.log('Cache check failed:', error.message);
     }
+    
+    // If not in cache, fetch from API
+    const _token = PropertiesService.getScriptProperties().getProperty('EODHD_API_TOKEN');
+    if (!_token) throw new Error("EODHD API token not set");
+    
+    const url = `https://eodhd.com/api/${endpoint}/${ticker}?api_token=${_token}&fmt=json`;
+    console.log(`Fetching ${url}`);
+    
+    const resp = await UrlFetchApp.fetch(url);
+    const raw = resp.getContentText();
+    const data = JSON.parse(raw);
+    
+    // Cache the result
+    try {
+      await MongoService.saveCache(mongoId, data, 21600);
+      console.log(`Cached ${mongoId} for 6 hours`);
+    } catch (error) {
+      console.log('Cache save failed:', error.message);
+    }
+    
+    return data;
   }
   
   /* ==============================================================
@@ -106,7 +128,7 @@ Array.prototype.last = function() {
   // EARNINGS (EPS)
   // --------------------------------------------------------------
 
-  function GET_DIV(ticker, year, fiscalYearEnd = "05-31")
+  async function GET_DIV(ticker, year, fiscalYearEnd = "05-31")
   {
     var sum = 0;
 
@@ -115,7 +137,7 @@ Array.prototype.last = function() {
     const ii = "Interim";
     const aa = "Annual";
 
-    const arr = JSON.parse(fetchEODHDJson(ticker, year) );
+    const arr = await fetchEODHDJson(ticker, year);
 
     if (!Array.isArray(arr) || arr.length === 0) {
       return "Error: no annualEarnings data (rate limit or missing EPS)";
@@ -215,6 +237,11 @@ Array.prototype.last = function() {
     return val;
   }
   
+// Mock Google Apps Script services for Node.js testing
+if (typeof PropertiesService === 'undefined') {
+  const MongoService = require('./db_service');
+}
+
 // Export for Node.js usage
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {

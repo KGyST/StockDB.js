@@ -51,7 +51,7 @@ async function test() {
   }
   
   console.log("\n=== Testing GET_DIV function ===");
-  const result = GET_DIV(ticker, year);
+  const result = await GET_DIV(ticker, year);
   
   console.log(`Eredmény (${ticker}, ${year}):`, result);
 }

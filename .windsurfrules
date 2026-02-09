@@ -13,3 +13,14 @@
 # Environment
 - Use process.env.MONGO_URI for MongoDB connections.
 - Always check if the current environment is Node.js vs Google Apps Script using 'typeof module'.
+
+# Git Commit and Documentation Standards
+- **Commit Tagging**: Every time you suggest a git commit or perform one, append the `#Windsurf` hashtag to the end of the subject line.
+- **Conventional Commits**: Use the following prefixes:
+  - `feat:` for new features
+  - `fix:` for bug fixes
+  - `refactor:` for code cleanup/restructuring (like the MongoService cleanup)
+  - `chore:` for maintenance or dependency updates
+- **Co-author Credit**: For significant logic changes, add `Co-authored-by: Windsurf <windsurf@codeium.com>` in the commit body.
+- **Contextual Comments**: Never write comments at the end of a line. Use only English for comments. Keep comments sparse and high-level.
+- **Indentation**: Strictly use 2-space indentation in all files.

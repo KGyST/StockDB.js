@@ -34,7 +34,17 @@ clasp push
 
 # Open in editor
 clasp open
+
+# Deploy with environment variables (recommended)
+node scripts/deploy.js
 ```
+
+The `deploy.js` script will:
+1. Load environment variables from `.env` file
+2. Set Google Apps Script properties using clasp
+3. Deploy the code to Google Apps Script
+
+This ensures your API keys and MongoDB URI are properly configured in the deployed environment.
 
 ## Environment Variables
 

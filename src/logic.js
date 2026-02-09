@@ -115,7 +115,9 @@ async function getFinancialData(ticker, provider, endpoint) {
   }
 
   const response = await FirebaseService._makeRequest(url);
-  if (!response.ok) throw new Error(`API error: ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
   
   const data = response.json();
 
@@ -129,60 +131,68 @@ async function getFinancialData(ticker, provider, endpoint) {
 // ==============================================================
 
 async function GET_DIV(ticker, year, fiscalYearEnd = "05-31") {
-  const arr = await getFinancialData(ticker, 'eodhd', 'div');
+  try {
+    const arr = await getFinancialData(ticker, 'eodhd', 'div');
 
-  if (!Array.isArray(arr) || arr.length === 0) return "Error: No data";
+    if (!Array.isArray(arr) || arr.length === 0) return "Error: No data";
 
-  const filteredArr = arr
-    .filter(d => d.value && d.date)
-    .map(d => ({ value: d.value, date: new Date(d.date), period: d.period }));
+    const filteredArr = arr
+      .filter(d => d.value && d.date)
+      .map(d => ({ value: d.value, date: new Date(d.date), period: d.period }));
 
-  // Logic for Annual/Final/Quarterly
-  const aa = "Annual", ff = "Final", ii = "Interim", qq = "Quarterly";
-  
-  const annual = filteredArr.find(d => d.period === aa && d.date.getFullYear() === year + 1);
-  if (annual) return annual.value;
+    // Logic for Annual/Final/Quarterly
+    const aa = "Annual", ff = "Final", ii = "Interim", qq = "Quarterly";
+    
+    const annual = filteredArr.find(d => d.period === aa && d.date.getFullYear() === year + 1);
+    if (annual) return annual.value;
 
-  const final = filteredArr.find(d => d.period === ff && d.date.getFullYear() === year + 1);
-  if (final) {
-    const prev = filteredArr.filter(d => d.date < final.date && d.period !== ii).last();
-    const interimsSum = filteredArr
-      .filter(d => (d.period === ii || !d.period) && prev && d.date > prev.date && d.date < final.date)
-      .map(d => d.value).sum();
-    return interimsSum + final.value;
+    const final = filteredArr.find(d => d.period === ff && d.date.getFullYear() === year + 1);
+    if (final) {
+      const prev = filteredArr.filter(d => d.date < final.date && d.period !== ii).last();
+      const interimsSum = filteredArr
+        .filter(d => (d.period === ii || !d.period) && prev && d.date > prev.date && d.date < final.date)
+        .map(d => d.value).sum();
+      return interimsSum + final.value;
+    }
+
+    return filteredArr
+      .filter(d => {
+        const dDate = d.date;
+        return dDate > new Date(`${year}-${fiscalYearEnd}`) && 
+               dDate <= new Date(`${year + 1}-${fiscalYearEnd}`) && 
+               (d.period === qq || !d.period);
+      }).map(d => d.value).sum() || "Error: invalid div";
+  } catch (error) {
+    return error.message;
   }
-
-  return filteredArr
-    .filter(d => {
-      const dDate = d.date;
-      return dDate > new Date(`${year}-${fiscalYearEnd}`) && 
-             dDate <= new Date(`${year + 1}-${fiscalYearEnd}`) && 
-             (d.period === qq || !d.period);
-    }).map(d => d.value).sum() || "Error: invalid div";
 }
 
 async function GET_METRIC(ticker, year, targetCurrency = "EUR") {
-  // Parallel fetch for speed
-  const [incomeJson, earningsJson] = await Promise.all([
-    getFinancialData(ticker, 'alphavantage', 'INCOME_STATEMENT'),
-    getFinancialData(ticker, 'alphavantage', 'EARNINGS')
-  ]);
+  try {
+    // Parallel fetch for speed
+    const [incomeJson, earningsJson] = await Promise.all([
+      getFinancialData(ticker, 'alphavantage', 'INCOME_STATEMENT'),
+      getFinancialData(ticker, 'alphavantage', 'EARNINGS')
+    ]);
 
-  const rpt = incomeJson.annualReports?.find(r => r.fiscalDateEnding.startsWith(String(year)));
-  const epsRpt = earningsJson.annualEarnings?.find(r => r.fiscalDateEnding.startsWith(String(year)));
+    const rpt = incomeJson.annualReports?.find(r => r.fiscalDateEnding.startsWith(String(year)));
+    const epsRpt = earningsJson.annualEarnings?.find(r => r.fiscalDateEnding.startsWith(String(year)));
 
-  if (!rpt || !epsRpt) return "Error: Missing reports";
+    if (!rpt || !epsRpt) return "Error: Missing reports";
 
-  const netIncome = Number(rpt.netIncome);
-  const eps = Number(epsRpt.reportedEPS);
-  const dividend = await GET_DIV(ticker, year);
+    const netIncome = Number(rpt.netIncome);
+    const eps = Number(epsRpt.reportedEPS);
+    const dividend = await GET_DIV(ticker, year);
 
-  if (typeof dividend !== "number") return dividend; // Return error string
+    if (typeof dividend !== "number") return dividend; // Return error string
 
-  const weightedShares = netIncome / eps;
-  const fx = getDailyFxRate(`${year}-12-31`, "USD", targetCurrency);
-  
-  return (dividend * fx) / weightedShares;
+    const weightedShares = netIncome / eps;
+    const fx = getDailyFxRate(`${year}-12-31`, "USD", targetCurrency);
+    
+    return (dividend * fx) / weightedShares;
+  } catch (error) {
+    return error.message;
+  }
 }
 
 // ==============================================================

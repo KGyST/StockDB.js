@@ -107,14 +107,24 @@ async function getFinancialData(ticker, provider, endpoint) {
   
   if (provider === 'eodhd') {
     const tokens = props.getProperty('EODHD_API_TOKEN');
-    const tokenArray = Array.isArray(tokens) ? tokens : [tokens];
+    let tokenArray;
+    try {
+      tokenArray = Array.isArray(tokens) ? tokens : JSON.parse(tokens || '[]');
+    } catch (e) {
+      tokenArray = tokens ? [tokens] : [];
+    }
     urls = tokenArray.map(token => 
       `https://eodhd.com/api/${endpoint}/${ticker}?api_token=${token}&fmt=json`
     );
     keyNames = tokenArray.map((_, i) => `EODHD_API_TOKEN[${i}]`);
   } else {
     const keys = props.getProperty('ALPHA_VANTAGE_API_KEY');
-    const keyArray = Array.isArray(keys) ? keys : [keys];
+    let keyArray;
+    try {
+      keyArray = Array.isArray(keys) ? keys : JSON.parse(keys || '[]');
+    } catch (e) {
+      keyArray = keys ? [keys] : [];
+    }
     urls = keyArray.map(key => 
       `https://www.alphavantage.co/query?function=${endpoint}&symbol=${ticker}&apikey=${key}`
     );
@@ -266,9 +276,15 @@ function setPropertyWithUI(propertyKey, displayName) {
   const currentValue = scriptProperties.getProperty(propertyKey);
   const maskedValue = maskSensitive(propertyKey, currentValue);
   
+  // For API keys, show array format hint
+  let inputHint = `Enter new ${displayName}:`;
+  if (propertyKey.includes('API_KEY') || propertyKey.includes('TOKEN')) {
+    inputHint = `Enter new ${displayName} (single key or JSON array ["key1","key2"]):`;
+  }
+  
   const response = ui.prompt(
     `Set ${displayName}`,
-    `Current value: ${maskedValue || '(not set)'}\n\nEnter new ${displayName}:`,
+    `Current value: ${maskedValue || '(not set)'}\n\n${inputHint}`,
     ui.ButtonSet.OK_CANCEL
   );
   
@@ -332,8 +348,23 @@ function maskSensitive(key, value) {
     key.toUpperCase().includes(keyword)
   );
   
-  if (isSensitive && value.length > 6) {
-    return value.substring(0, 3) + '****' + value.substring(value.length - 2);
+  if (isSensitive) {
+    // Handle JSON arrays for API keys
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map(item => 
+          item.length > 6 ? item.substring(0, 3) + '****' + item.substring(item.length - 2) : item
+        ).join(', ');
+      }
+    } catch (e) {
+      // Not JSON, treat as single value
+    }
+    
+    // Single value masking
+    if (value.length > 6) {
+      return value.substring(0, 3) + '****' + value.substring(value.length - 2);
+    }
   }
   return value;
 }

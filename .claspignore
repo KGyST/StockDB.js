@@ -12,7 +12,6 @@ cache/
 # IDE and version control
 .git/
 .vscode/
-.aider*
 .windsurfrules
 
 # Documentation

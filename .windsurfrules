@@ -24,3 +24,36 @@
 - **Co-author Credit**: For significant logic changes, add `Co-authored-by: Windsurf <windsurf@codeium.com>` in the commit body.
 - **Contextual Comments**: Never write comments at the end of a line. Use only English for comments. Keep comments sparse and high-level.
 - **Indentation**: Strictly use 2-space indentation in all files.
+
+# StockDB Project-Specific Rules
+# These rules supplement global ~/.windsurf/rules.md
+
+## Project Structure
+- Use `src/` for main code files
+- Use `scripts/` for utility and deployment scripts
+- Use `.env` for environment variables (never commit to git)
+
+## API Key Management
+- Store API keys in Google Apps Script Properties
+- Use JSON array format for multiple keys: `["key1","key2"]`
+- Implement automatic fallback when quota exhausted (402 errors)
+
+## Firebase Integration
+- Use Firebase for caching API responses
+- Sanitize ticker symbols (replace dots with underscores)
+- Include TTL for cache entries
+
+## Testing & Debugging
+- Use 'Debug Local Runner' launch configuration
+- Monitor for Google Apps Script service errors (SpreadsheetApp, UrlFetchApp)
+- Mock missing services in local_runner.js
+
+## Google Apps Script Specific
+- Use PropertiesService.getScriptProperties() for configuration
+- Deploy with `clasp push` from src/ directory
+- Use UrlFetchApp.fetch() for HTTP requests
+
+## Local Development
+- Use process.env for environment variables in Node.js
+- Firebase URL: process.env.FIREBASE_URL
+- API keys: process.env.ALPHA_VANTAGE_API_KEY, process.env.EODHD_API_TOKEN

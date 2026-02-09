@@ -1,256 +1,306 @@
-Array.prototype.sum = function() {
-  return this.reduce((acc, val) => acc + (Number(val) || 0), 0);
-};
+// ==============================================================
+// GLOBAL SETTINGS - Properties retrieved dynamically when needed
+// ==============================================================
 
-Array.prototype.last = function() {
-  return this[this.length - 1];
-};
+// ==============================================================
+// CORE UTILS
+// ==============================================================
+Array.prototype.sum = function() { return this.reduce((acc, val) => acc + (Number(val) || 0), 0); };
+Array.prototype.last = function() { return this[this.length - 1]; };
 
-/* ==============================================================
-   GLOBAL SETTINGS
-   ============================================================== */
-   function getAlphaVantageKey() {
-    const key = PropertiesService.getScriptProperties().getProperty('ALPHA_VANTAGE_API_KEY');
-    if (!key) throw new Error("Alpha Vantage API key not set");
-    return key;
-  }
-  
-  /* ==============================================================
-     METRIC MAP
-     ============================================================== */
-  var METRIC_MAP = {
-    "netIncome":      "INCOME_STATEMENT",
-    "dividendPayout": "CASH_FLOW",
-    "reportedEPS":    "EARNINGS",
-  };
-  
+// ==============================================================
+// FIREBASE SERVICE
+// ==============================================================
+const FirebaseService = {
+  // Helper to sanitize ticker names for Firebase keys (no dots allowed)
+  _sanitizeTicker(ticker) {
+    return ticker ? ticker.replace(/\./g, '_') : ticker;
+  },
 
-  /* ==============================================================
-     FETCH + CACHE
-     ============================================================== */
-  async function fetchAlphaVantageJson(ticker, endpoint) {
-    const mongoId = `alphavantage/${endpoint}/${ticker}`;
+  _getFirebaseUrl() {
+    const baseUrl = PropertiesService.getScriptProperties().getProperty('FIREBASE_URL');
+    if (!baseUrl) throw new Error('FIREBASE_URL not set in Script Properties');
+    return baseUrl.replace(/\/$/, ''); // Remove trailing slash if any
+  },
+
+  _getFirebaseAuth() {
+    const auth = PropertiesService.getScriptProperties().getProperty('FIREBASE_AUTH');
+    if (!auth) throw new Error('FIREBASE_AUTH not set in Script Properties');
+    return auth;
+  },
+
+  async _makeRequest(url, options = {}) {
+    // Google Apps Script environment
+    const gasOptions = {
+      method: options.method || 'get',
+      contentType: 'application/json',
+      payload: options.body || null,
+      muteHttpExceptions: true
+    };
+    const response = UrlFetchApp.fetch(url, gasOptions);
+    const code = response.getResponseCode();
+    const content = response.getContentText();
+    return {
+      ok: code >= 200 && code < 300,
+      status: code,
+      json: () => JSON.parse(content),
+      text: () => content
+    };
+  },
+
+  async getCache(ticker) {
+    const cleanTicker = this._sanitizeTicker(ticker);
+    const url = `${this._getFirebaseUrl()}/cache/${cleanTicker}.json?auth=${this._getFirebaseAuth()}`;
     
-    // Try to get from cache first
     try {
-      const cached = await MongoService.getCache(mongoId);
-      if (cached) {
-        console.log(`Cache hit for ${mongoId}`);
-        return cached.data;
-      }
-    } catch (error) {
-      console.log('Cache check failed:', error.message);
-    }
-    
-    // If not in cache, fetch from API
-    const key = PropertiesService.getScriptProperties().getProperty('ALPHA_VANTAGE_API_KEY');
-    if (!key) throw new Error("Alpha Vantage API key not set");
-    
-    const url = `https://www.alphavantage.co/query?function=${endpoint}&symbol=${ticker}&apikey=${key}`;
-    console.log(`Fetching ${url}`);
-    
-    const resp = UrlFetchApp.fetch(url);
-    const raw = resp.getContentText();
-    const data = JSON.parse(raw);
-    
-    // Cache the result
-    try {
-      await MongoService.saveCache(mongoId, data, 21600);
-      console.log(`Cached ${mongoId} for 6 hours`);
-    } catch (error) {
-      console.log('Cache save failed:', error.message);
-    }
-    
-    return data;
-  }
-  
-
-  async function fetchEODHDJson(ticker, year, endpoint = "div") {
-    const mongoId = `eodhd/${endpoint}/${ticker}`;
-    
-    // Try to get from cache first
-    try {
-      const cached = await MongoService.getCache(mongoId);
-      if (cached) {
-        console.log(`Cache hit for ${mongoId}`);
-        return cached.data;
-      }
-    } catch (error) {
-      console.log('Cache check failed:', error.message);
-    }
-    
-    // If not in cache, fetch from API
-    const _token = PropertiesService.getScriptProperties().getProperty('EODHD_API_TOKEN');
-    if (!_token) throw new Error("EODHD API token not set");
-    
-    const url = `https://eodhd.com/api/${endpoint}/${ticker}?api_token=${_token}&fmt=json`;
-    console.log(`Fetching ${url}`);
-    
-    const resp = await UrlFetchApp.fetch(url);
-    const raw = resp.getContentText();
-    const data = JSON.parse(raw);
-    
-    // Cache the result
-    try {
-      await MongoService.saveCache(mongoId, data, 21600);
-      console.log(`Cached ${mongoId} for 6 hours`);
-    } catch (error) {
-      console.log('Cache save failed:', error.message);
-    }
-    
-    return data;
-  }
-  
-  /* ==============================================================
-     FX (USD → target)
-     ============================================================== */
-  function getDailyFxRate(date, src, tgt, fallback = 0.95) {
-    const key = `FX_${src}_${tgt}_${date}`;
-    const props = PropertiesService.getScriptProperties();
-    const cached = props.getProperty(key);
-    if (cached) return Number(cached);
-  
-    try {
-      const url = `https://api.exchangerate.host/${date}?base=${src}&symbols=${tgt}`;
-      const json = JSON.parse(UrlFetchApp.fetch(url).getContentText());
-      const rate = json?.rates?.[tgt];
-      if (typeof rate === "number") {
-        props.setProperty(key, rate);
-        return rate;
-      }
-    } catch (_) {}
-  
-    return fallback;
-  }
-
-
-  // --------------------------------------------------------------
-  // EARNINGS (EPS)
-  // --------------------------------------------------------------
-
-  async function GET_DIV(ticker, year, fiscalYearEnd = "05-31")
-  {
-    var sum = 0;
-
-    const ff = "Final";
-    const qq = "Quarterly";
-    const ii = "Interim";
-    const aa = "Annual";
-
-    const arr = await fetchEODHDJson(ticker, year);
-
-    if (!Array.isArray(arr) || arr.length === 0) {
-      return "Error: no annualEarnings data (rate limit or missing EPS)";
-    }
-
-    var filteredArr = arr
-      .filter(d => d.value && d.date)
-      .map(d => ({
-        value: d.value,
-        date: new Date(d.date),
-        period: d.period,
-      }))
-
-    var annual = filteredArr
-      .find(d => (d.period == aa) && (d.date.getFullYear() == year + 1))
-
-    if (annual)
-      return annual.date;
-
-    var final = filteredArr
-      .find(d => (d.period == ff) && (d.date.getFullYear() == year + 1))
-
-    if (final)
-    // Interim / Final
-    {
-      var prev = filteredArr
-        .filter(d => d.date < final.date && d.period != ii)
-        // .sort((a, b)  => a.date > b.date)
-        .last()
-
-      var interims = filteredArr
-        .filter(d => 
-          (d.period == ii || d.period == null)
-          && prev && d.date > prev.date 
-          && d.date < final.date )
+      const response = await this._makeRequest(url);
+      if (!response.ok) return null;
       
-      if (interims)
-        sum += interims
-          .map(d => d.value)
-          .sum();
-
-      sum += final.value;
+      const result = response.json();
+      return result?.data || null;
+    } catch (e) {
+      return null;
     }
-    else
-    // Quarerly
-    {
-      sum = filteredArr
-        .filter(d => {
-          const dDate = new Date(d.date);
-          return dDate > new Date(`${year}-${fiscalYearEnd}`) 
-            && dDate <= new Date(`${year + 1}-${fiscalYearEnd}`)
-            && (d.period == qq || d.period == null);
-        })
-        .sum();
-    } 
+  },
 
-    return sum == null ? "Error: invalid div value" : sum;
-  }
+  async saveCache(ticker, data, ttl = 21600) {
+    const cleanTicker = this._sanitizeTicker(ticker);
+    const url = `${this._getFirebaseUrl()}/cache/${cleanTicker}.json?auth=${this._getFirebaseAuth()}`;
+    
+    const cacheData = {
+      data: data,
+      createdAt: new Date().toISOString()
+    };
 
-  /* ==============================================================
-     CORE: DPS FROM EPS
-     ============================================================== */
-  function GET_METRIC(ticker, year, targetCurrency = "EUR") {
-    const netIncome = _getMetric(ticker, "netIncome", year);
-    const eps       = _getMetric(ticker, "reportedEPS", year);
-    const dividend  = getEarnings(ticker, year);
-    console.log(netIncome);
-    console.log(eps);
-    console.log(dividend);
-  
-    if ([netIncome, eps, dividend].some(v => typeof v !== "number")) {
-      return "Error: missing numeric input";
+    try {
+      const response = await this._makeRequest(url, {
+        method: 'PUT',
+        body: JSON.stringify(cacheData)
+      });
+      return response.ok;
+    } catch (e) {
+      return false;
     }
-  
-    // EPS definition → weighted avg shares
-    const weightedShares = netIncome / eps;
-  
-    // FX correction (Alpha Vantage cashflow is USD)
-    const fx = getDailyFxRate(`${year}-12-31`, "USD", targetCurrency, 0.95);
-    const dividendEUR = dividend * fx;
-  
-    return dividendEUR / weightedShares;
+  },
+
+  async _deleteCache(ticker) {
+    const cleanTicker = this._sanitizeTicker(ticker);
+    const url = `${this._getFirebaseUrl()}/cache/${cleanTicker}.json?auth=${this._getFirebaseAuth()}`;
+    await this._makeRequest(url, { method: 'DELETE' });
   }
+};
+
+// ==============================================================
+// UNIFIED FETCH LOGIC
+// ==============================================================
+async function getFinancialData(ticker, provider, endpoint) {
+  const cachePath = `${provider}/${endpoint}/${ticker}`;
   
-  function _getMetric(ticker, metric, optYear) {
-    const map = METRIC_MAP[metric];
-    const json = fetchAlphaVantageJson(ticker, map);
+  // 1. Check Cache
+  const cached = await FirebaseService.getCache(cachePath);
+  if (cached) return cached;
+
+  // 2. Fetch from API
+  let url;
+  const props = PropertiesService.getScriptProperties();
   
-    // FINANCIAL STATEMENTS
-    const reports = json.annualReports;
-    const rpt = optYear
-      ? reports.find(r => r.fiscalDateEnding.startsWith(String(optYear)))
-      : reports[0];
-  
-    let val = rpt[metric];
-    if (typeof val === "string") val = Number(val.replace(/,/g, ""));
-    return val;
+  if (provider === 'eodhd') {
+    const token = props.getProperty('EODHD_API_TOKEN');
+    if (!token) throw new Error('EODHD_API_TOKEN not set in Script Properties');
+    url = `https://eodhd.com/api/${endpoint}/${ticker}?api_token=${token}&fmt=json`;
+  } else {
+    const key = props.getProperty('ALPHA_VANTAGE_API_KEY');
+    if (!key) throw new Error('ALPHA_VANTAGE_API_KEY not set in Script Properties');
+    url = `https://www.alphavantage.co/query?function=${endpoint}&symbol=${ticker}&apikey=${key}`;
   }
+
+  const response = await FirebaseService._makeRequest(url);
+  if (!response.ok) throw new Error(`API error: ${response.status}`);
   
-// Mock Google Apps Script services for Node.js testing
-if (typeof PropertiesService === 'undefined') {
-  const MongoService = require('./db_service');
+  const data = response.json();
+
+  // 3. Save to Cache and Return
+  if (data) await FirebaseService.saveCache(cachePath, data);
+  return data;
 }
 
-// Export for Node.js usage
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    GET_DIV,
-    GET_METRIC,
-    getDailyFxRate,
-    fetchEODHDJson,
-    fetchAlphaVantageJson,
-    _getMetric
-  };
-}
+// ==============================================================
+// BUSINESS LOGIC
+// ==============================================================
+
+async function GET_DIV(ticker, year, fiscalYearEnd = "05-31") {
+  const arr = await getFinancialData(ticker, 'eodhd', 'div');
+
+  if (!Array.isArray(arr) || arr.length === 0) return "Error: No data";
+
+  const filteredArr = arr
+    .filter(d => d.value && d.date)
+    .map(d => ({ value: d.value, date: new Date(d.date), period: d.period }));
+
+  // Logic for Annual/Final/Quarterly
+  const aa = "Annual", ff = "Final", ii = "Interim", qq = "Quarterly";
   
+  const annual = filteredArr.find(d => d.period === aa && d.date.getFullYear() === year + 1);
+  if (annual) return annual.value;
+
+  const final = filteredArr.find(d => d.period === ff && d.date.getFullYear() === year + 1);
+  if (final) {
+    const prev = filteredArr.filter(d => d.date < final.date && d.period !== ii).last();
+    const interimsSum = filteredArr
+      .filter(d => (d.period === ii || !d.period) && prev && d.date > prev.date && d.date < final.date)
+      .map(d => d.value).sum();
+    return interimsSum + final.value;
+  }
+
+  return filteredArr
+    .filter(d => {
+      const dDate = d.date;
+      return dDate > new Date(`${year}-${fiscalYearEnd}`) && 
+             dDate <= new Date(`${year + 1}-${fiscalYearEnd}`) && 
+             (d.period === qq || !d.period);
+    }).map(d => d.value).sum() || "Error: invalid div";
+}
+
+async function GET_METRIC(ticker, year, targetCurrency = "EUR") {
+  // Parallel fetch for speed
+  const [incomeJson, earningsJson] = await Promise.all([
+    getFinancialData(ticker, 'alphavantage', 'INCOME_STATEMENT'),
+    getFinancialData(ticker, 'alphavantage', 'EARNINGS')
+  ]);
+
+  const rpt = incomeJson.annualReports?.find(r => r.fiscalDateEnding.startsWith(String(year)));
+  const epsRpt = earningsJson.annualEarnings?.find(r => r.fiscalDateEnding.startsWith(String(year)));
+
+  if (!rpt || !epsRpt) return "Error: Missing reports";
+
+  const netIncome = Number(rpt.netIncome);
+  const eps = Number(epsRpt.reportedEPS);
+  const dividend = await GET_DIV(ticker, year);
+
+  if (typeof dividend !== "number") return dividend; // Return error string
+
+  const weightedShares = netIncome / eps;
+  const fx = getDailyFxRate(`${year}-12-31`, "USD", targetCurrency);
+  
+  return (dividend * fx) / weightedShares;
+}
+
+// ==============================================================
+// FX & UTILITIES
+// ==============================================================
+// ==============================================================
+// UI PROPERTY MANAGEMENT
+// ==============================================================
+
+// Create menu when spreadsheet opens
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("🔑 StockDB Settings")
+    .addSeparator()
+    .addItem("🔑 Set Alpha Vantage Key", "setAlphaVantageKey")
+    .addItem("💰 Set EODHD Token", "setEODHDToken")
+    .addItem("🔥 Set Firebase URL", "setFirebaseURL")
+    .addItem("🔐 Set Firebase Auth", "setFirebaseAuth")
+    .addSeparator()
+    .addItem("📋 Show Current Properties", "showCurrentProperties")
+    .addItem("🗑️ Clear All Properties", "clearAllProperties")
+    .addToUi();
+}
+
+// Individual property setters
+function setAlphaVantageKey() {
+  setPropertyWithUI("ALPHA_VANTAGE_API_KEY", "Alpha Vantage API Key");
+}
+
+function setEODHDToken() {
+  setPropertyWithUI("EODHD_API_TOKEN", "EODHD API Token");
+}
+
+function setFirebaseURL() {
+  setPropertyWithUI("FIREBASE_URL", "Firebase URL");
+}
+
+function setFirebaseAuth() {
+  setPropertyWithUI("FIREBASE_AUTH", "Firebase Auth Token");
+}
+
+// Generic property setter with UI
+function setPropertyWithUI(propertyKey, displayName) {
+  const ui = SpreadsheetApp.getUi();
+  const scriptProperties = PropertiesService.getScriptProperties();
+  
+  // Get current value
+  const currentValue = scriptProperties.getProperty(propertyKey);
+  const maskedValue = maskSensitive(propertyKey, currentValue);
+  
+  const response = ui.prompt(
+    `Set ${displayName}`,
+    `Current value: ${maskedValue || '(not set)'}\n\nEnter new ${displayName}:`,
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (response.getSelectedButton() === ui.Button.OK) {
+    const newValue = response.getResponseText().trim();
+    if (newValue) {
+      scriptProperties.setProperty(propertyKey, newValue);
+      ui.alert(`✅ ${displayName} saved successfully!`);
+    } else {
+      ui.alert(`❌ Please enter a valid ${displayName}`);
+    }
+  }
+}
+
+// Show current properties
+function showCurrentProperties() {
+  const ui = SpreadsheetApp.getUi();
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const properties = scriptProperties.getProperties();
+  
+  if (Object.keys(properties).length === 0) {
+    ui.alert("📋 No properties set. Use 'Setup All Properties' to get started.");
+    return;
+  }
+  
+  let message = "📋 Current Properties:\n\n";
+  for (const [key, value] of Object.entries(properties)) {
+    const maskedValue = maskSensitive(key, value);
+    message += `${key}: ${maskedValue}\n`;
+  }
+  
+  ui.alert(message);
+}
+
+// Clear all properties with confirmation
+function clearAllProperties() {
+  const ui = SpreadsheetApp.getUi();
+  
+  const response = ui.alert(
+    "⚠️ Clear All Properties",
+    "This will delete ALL properties. Are you sure?",
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response === ui.Button.YES) {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const currentProps = scriptProperties.getProperties();
+    const count = Object.keys(currentProps).length;
+    
+    scriptProperties.deleteAllProperties();
+    ui.alert(`🗑️ Cleared ${count} properties`);
+  }
+}
+
+// Helper function to mask sensitive values
+function maskSensitive(key, value) {
+  if (!value) return '(not set)';
+  
+  const sensitiveKeywords = ['KEY', 'TOKEN', 'AUTH', 'PASSWORD', 'SECRET'];
+  const isSensitive = sensitiveKeywords.some(keyword => 
+    key.toUpperCase().includes(keyword)
+  );
+  
+  if (isSensitive && value.length > 6) {
+    return value.substring(0, 3) + '****' + value.substring(value.length - 2);
+  }
+  return value;
+}

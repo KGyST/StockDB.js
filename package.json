@@ -13,6 +13,8 @@
     "@types/google-apps-script": "^2.0.8"
   },
   "dependencies": {
-    "mongodb": "^7.1.0"
+    "dotenv": "^17.2.4",
+    "mongodb": "^7.1.0",
+    "node-fetch": "^3.3.2"
   }
 }

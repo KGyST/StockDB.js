@@ -1,4 +1,20 @@
-local_runner.js
+# Build and dependencies
 node_modules/
 package.json
 package-lock.json
+
+# Local development and testing
+scripts/
+test_data/
+cache/
+.env
+
+# IDE and version control
+.git/
+.vscode/
+.aider*
+.windsurfrules
+
+# Documentation
+README.md
+*.md

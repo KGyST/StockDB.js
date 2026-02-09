@@ -17,23 +17,6 @@
         "${workspaceFolder}/**",
         "!**/node_modules/**"
       ]
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Debug Test",
-      "skipFiles": ["<node_internals>/**"],
-      "program": "${workspaceFolder}/scripts/debug_test.js",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "env": {
-        "NODE_OPTIONS": "--inspect"
-      },
-      "sourceMaps": true,
-      "resolveSourceMapLocations": [
-        "${workspaceFolder}/**",
-        "!**/node_modules/**"
-      ]
     }
   ]
 }

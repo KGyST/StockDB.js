@@ -41,19 +41,19 @@ if (typeof CacheService === 'undefined') {
       }
     })
   };
-}
 
-if (typeof UrlFetchApp === 'undefined') {
-  global.UrlFetchApp = {
-    fetch: async (url) => {
-      const response = await fetch(url);
-      const text = await response.text();
-      return {
-        getContentText: () => text,
-        getResponseCode: () => response.status
-      };
-    }
-  };
+  if (typeof UrlFetchApp === 'undefined') {
+    global.UrlFetchApp = {
+      fetch: async (url) => {
+        const response = await fetch(url);
+        const text = await response.text();
+        return {
+          getContentText: () => text,
+          getResponseCode: () => response.status
+        };
+      }
+    };
+  }
 }
 
 if (typeof LockService === 'undefined') {

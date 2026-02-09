@@ -22,7 +22,16 @@ if (typeof PropertiesService === 'undefined') {
     getScriptProperties: () => ({
       getProperty: (key) => {
         // Return value from .env file or null if not found
-        return envVars[key] || null;
+        const value = envVars[key] || null;
+        // Parse JSON arrays for API keys, otherwise return as-is
+        if (value && (key.includes('API_KEY') || key.includes('TOKEN'))) {
+          try {
+            return JSON.parse(value);
+          } catch (e) {
+            return value; // Fallback to single value if not valid JSON
+          }
+        }
+        return value;
       },
       setProperty: (key, value) => {
         console.log(`Mock: Setting ${key} = ${value}`);

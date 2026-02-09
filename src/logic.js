@@ -100,30 +100,53 @@ async function getFinancialData(ticker, provider, endpoint) {
   const cached = await FirebaseService.getCache(cachePath);
   if (cached) return cached;
 
-  // 2. Fetch from API
-  let url;
+  // 2. Fetch from API with fallback keys
   const props = PropertiesService.getScriptProperties();
+  let urls = [];
+  let keyNames = [];
   
   if (provider === 'eodhd') {
-    const token = props.getProperty('EODHD_API_TOKEN');
-    if (!token) throw new Error('EODHD_API_TOKEN not set in Script Properties');
-    url = `https://eodhd.com/api/${endpoint}/${ticker}?api_token=${token}&fmt=json`;
+    const tokens = props.getProperty('EODHD_API_TOKEN');
+    const tokenArray = Array.isArray(tokens) ? tokens : [tokens];
+    urls = tokenArray.map(token => 
+      `https://eodhd.com/api/${endpoint}/${ticker}?api_token=${token}&fmt=json`
+    );
+    keyNames = tokenArray.map((_, i) => `EODHD_API_TOKEN[${i}]`);
   } else {
-    const key = props.getProperty('ALPHA_VANTAGE_API_KEY');
-    if (!key) throw new Error('ALPHA_VANTAGE_API_KEY not set in Script Properties');
-    url = `https://www.alphavantage.co/query?function=${endpoint}&symbol=${ticker}&apikey=${key}`;
+    const keys = props.getProperty('ALPHA_VANTAGE_API_KEY');
+    const keyArray = Array.isArray(keys) ? keys : [keys];
+    urls = keyArray.map(key => 
+      `https://www.alphavantage.co/query?function=${endpoint}&symbol=${ticker}&apikey=${key}`
+    );
+    keyNames = keyArray.map((_, i) => `ALPHA_VANTAGE_API_KEY[${i}]`);
   }
 
-  const response = await FirebaseService._makeRequest(url);
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+  // Try each API key until one works
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const response = await FirebaseService._makeRequest(urls[i]);
+      if (response.ok) {
+        const data = response.json();
+        // Save to Cache and Return
+        if (data) await FirebaseService.saveCache(cachePath, data);
+        return data;
+      } else if (response.status === 402) {
+        console.log(`API quota exhausted for ${keyNames[i]}, trying next key...`);
+        continue; // Try next key
+      } else {
+        throw new Error(`API error: ${response.status}`);
+      }
+    } catch (error) {
+      if (i === urls.length - 1) {
+        // Last key failed, throw the error
+        throw error;
+      }
+      console.log(`Error with ${keyNames[i]}: ${error.message}, trying next key...`);
+      continue;
+    }
   }
   
-  const data = response.json();
-
-  // 3. Save to Cache and Return
-  if (data) await FirebaseService.saveCache(cachePath, data);
-  return data;
+  throw new Error(`All ${provider} API keys exhausted or failed`);
 }
 
 // ==============================================================
